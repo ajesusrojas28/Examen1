@@ -36,6 +36,47 @@ export const formatearFecha = (iso) =>
  */
 export const cargarPagina = async (pagina = 1) => {
   // TODO
+  $lista.setAttribute("aria-busy", "true");
+
+  try {
+    const { data, meta } = await listarEquipos(pagina, POR_PAGINA);
+
+    paginaActual = meta.current_page;
+    ultimaPagina = meta.last_page;
+
+    $lista.replaceChildren();
+
+    if (data.length === 0) {
+      const $vacio = document.createElement("li");
+      $vacio.className = "vacio";
+      $vacio.textContent = "No hay equipos registrados.";
+      $lista.append($vacio);
+    }
+
+    for (const equipo of data) {
+      const $tarjeta = $plantilla.content.cloneNode(true);
+      const $estado = $tarjeta.querySelector(".estado");
+
+      $tarjeta.querySelector("li").dataset.id = equipo.id;
+      $tarjeta.querySelector(".codigo").textContent = equipo.codigo;
+      $tarjeta.querySelector(".nombre").textContent = equipo.nombre;
+      $tarjeta.querySelector(".categoria").textContent = equipo.categoria?.nombre ?? "";
+      $tarjeta.querySelector(".fecha").textContent = formatearFecha(equipo.fecha_adquisicion);
+      $estado.textContent = equipo.estado;
+      $estado.dataset.estado = equipo.estado;
+
+      $lista.append($tarjeta);
+    }
+
+    $resumen.textContent = `Mostrando ${meta.from ?? 0}–${meta.to ?? 0} de ${meta.total}`;
+    $paginaActual.textContent = `Página ${meta.current_page} de ${meta.last_page}`;
+    $btnAnterior.disabled = paginaActual <= 1;
+    $btnSiguiente.disabled = paginaActual >= ultimaPagina;
+  } catch (error) {
+    mostrarMensaje("error", "No fue posible cargar los equipos.");
+  } finally {
+    $lista.setAttribute("aria-busy", "false");
+  }
 };
 
 /**
@@ -51,6 +92,27 @@ export const cargarPagina = async (pagina = 1) => {
  */
 const alHacerClicEnLista = async (evento) => {
   // TODO
+  const $boton = evento.target.closest(".btn-eliminar");
+  if (!$boton) return;
+
+  const $tarjeta = $boton.closest("li");
+  const codigo = $tarjeta.querySelector(".codigo").textContent;
+
+  if (!confirm(`¿Eliminar el equipo ${codigo}?`)) return;
+
+  try {
+    await eliminarEquipo($tarjeta.dataset.id);
+    mostrarMensaje("exito", "Equipo eliminado.");
+
+    const eraElUltimo = $lista.querySelectorAll(".tarjeta").length === 1;
+    await cargarPagina(eraElUltimo && paginaActual > 1 ? paginaActual - 1 : paginaActual);
+  } catch (error) {
+    if (error.status === 409) {
+      mostrarMensaje("error", error.datos.mensaje);
+    } else {
+      mostrarMensaje("error", "No fue posible eliminar el equipo.");
+    }
+  }
 };
 
 // Parcialmente implementado: complete el TODO de los botones de paginación.
@@ -58,6 +120,8 @@ export const iniciarListado = () => {
   $lista.addEventListener("click", alHacerClicEnLista);
 
   // TODO [F2] Conecte #btn-anterior y #btn-siguiente con cargarPagina()
+  $btnAnterior.addEventListener("click", () => cargarPagina(paginaActual - 1));
+  $btnSiguiente.addEventListener("click", () => cargarPagina(paginaActual + 1));
 
   cargarPagina(1);
 };

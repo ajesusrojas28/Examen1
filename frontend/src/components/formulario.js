@@ -26,4 +26,60 @@ const $btnGuardar = document.querySelector("#btn-guardar");
  */
 export const iniciarFormulario = ({ alGuardar }) => {
   // TODO
+  const aNumero = (valor) => (valor === "" ? null : Number(valor));
+
+  const cargarCategorias = async () => {
+    try {
+      const { data } = await listarCategorias();
+
+      for (const categoria of data) {
+        const $opcion = document.createElement("option");
+        $opcion.value = categoria.id;
+        $opcion.textContent = categoria.nombre;
+        $selectCategoria.append($opcion);
+      }
+    } catch (error) {
+      mostrarMensaje("error", "No fue posible cargar las categorías.");
+    }
+  };
+
+  cargarCategorias();
+
+  $form.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+
+    $form.querySelectorAll("[data-error]").forEach(($p) => ($p.textContent = ""));
+    $form.querySelectorAll("[aria-invalid]").forEach(($campo) => $campo.removeAttribute("aria-invalid"));
+
+    const datos = Object.fromEntries(new FormData($form));
+    datos.categoria_id = aNumero(datos.categoria_id);
+    datos.costo_interno = aNumero(datos.costo_interno);
+
+    const textoOriginal = $btnGuardar.textContent;
+    $btnGuardar.disabled = true;
+    $btnGuardar.textContent = "Guardando…";
+
+    try {
+      await crearEquipo(datos);
+
+      $form.reset();
+      mostrarMensaje("exito", `Equipo ${datos.codigo} registrado.`);
+      alGuardar();
+    } catch (error) {
+      if (error.status === 422) {
+        for (const [campo, mensajes] of Object.entries(error.datos.errors ?? {})) {
+          const $error = $form.querySelector(`[data-error="${campo}"]`);
+          const $campo = $form.querySelector(`[name="${campo}"]`);
+
+          if ($error) $error.textContent = mensajes[0];
+          if ($campo) $campo.setAttribute("aria-invalid", "true");
+        }
+      } else {
+        mostrarMensaje("error", "No fue posible registrar el equipo.");
+      }
+    } finally {
+      $btnGuardar.disabled = false;
+      $btnGuardar.textContent = textoOriginal;
+    }
+  });
 };
